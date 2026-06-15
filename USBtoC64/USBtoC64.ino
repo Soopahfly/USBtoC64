@@ -54,27 +54,36 @@ static inline uint32_t LED_RED()   { return ws2812b.Color(0, 25, 0); }
 // Define GPIO for switch Mouse - Joystick
 #define SWITCH_MJ         13 // HIGH = mouse, LOW = joystick
 
-// Define the default timers for the mouse delay, all empirical for PAL version
-#define PAL                0 // Select if it is PAL or NTSC and adjust the timings
+// Define the default timers for the mouse delay, all empirical for PAL version.
+// PAL remains a build-time default only; the active setting is saved in EEPROM.
+#ifndef PAL
+  #define PAL              0 // Select if it is PAL or NTSC and adjust the timings
+#endif
+
+#define PAL_MINdelayOnX   2450
+#define PAL_MAXdelayOnX   5040
+#define PAL_MINdelayOnY   2440
+#define PAL_MAXdelayOnY   5100
+#define PAL_STEPdelayOnX    10.16689245f
+#define PAL_STEPdelayOnY    10.14384171f
+#define PAL_M2JCalib       833 // 20000 at 240 MHz
+
+#define NTSC_MINdelayOnX  2360
+#define NTSC_MAXdelayOnX  4855
+#define NTSC_MINdelayOnY  2351
+#define NTSC_MAXdelayOnY  4913
+#define NTSC_STEPdelayOnX    9.794315054f
+#define NTSC_STEPdelayOnY    9.772109035f
+#define NTSC_M2JCalib      802 // 20000 at 240 MHz
 
 #if PAL
-  #define MINdelayOnX   2450
-  #define MAXdelayOnX   5040
-  #define MINdelayOnY   2440
-  #define MAXdelayOnY   5100
-  #define STEPdelayOnX    10.16689245
-  #define STEPdelayOnY    10.14384171
-  // Define the timing for mouse used as Joystick
-  #define M2JCalib       833 // 20000 at 240 MHz
+  #define DEFAULT_PAL_TIMING 1
+  #define DEFAULT_MINdelayOnX PAL_MINdelayOnX
+  #define DEFAULT_MINdelayOnY PAL_MINdelayOnY
 #else
-  #define MINdelayOnX   2360
-  #define MAXdelayOnX   4855
-  #define MINdelayOnY   2351
-  #define MAXdelayOnY   4913
-  #define STEPdelayOnX     9.794315054
-  #define STEPdelayOnY     9.772109035
-  // Define the timing for mouse used as Joystick
-  #define M2JCalib      802 // 20000 at 240 MHz
+  #define DEFAULT_PAL_TIMING 0
+  #define DEFAULT_MINdelayOnX NTSC_MINdelayOnX
+  #define DEFAULT_MINdelayOnY NTSC_MINdelayOnY
 #endif
 
 #define A_FIRE            7
@@ -89,12 +98,27 @@ static inline uint32_t LED_RED()   { return ws2812b.Color(0, 25, 0); }
 #define CONFIG            0 // Set the configuration switch to the "Boot" button
 #define JOYBUTTONS        7 // 4 directions and 3 fire
 
+// Mouse speed presets: 1=slow, 2=medium, 3=normal, 4=fast, 5=very fast.
+#ifndef C64_MOUSE_SPEED
+  #define C64_MOUSE_SPEED 3
+#endif
+#ifndef AMIGA_MOUSE_SPEED
+  #define AMIGA_MOUSE_SPEED 3
+#endif
+#define DEFAULT_C64_MOUSE_SPEED   C64_MOUSE_SPEED
+#define DEFAULT_AMIGA_MOUSE_SPEED AMIGA_MOUSE_SPEED
+
 // EEPROM layout: first JOYBUTTONS*2 bytes are joystick mapping (original),
-// then 2 bytes are reserved for the target mode selection
+// then bytes are reserved for target mode and adapter settings.
 #define EEPROM_MODE_MAGIC_ADDR   (JOYBUTTONS * 2)
 #define EEPROM_MODE_VALUE_ADDR   (JOYBUTTONS * 2 + 1)
 #define EEPROM_MODE_MAGIC        0xA5
-#define EEPROM_SIZE              (JOYBUTTONS * 2 + 2)
+#define EEPROM_SETTINGS_MAGIC_ADDR  (JOYBUTTONS * 2 + 2)
+#define EEPROM_SETTINGS_PAL_ADDR    (JOYBUTTONS * 2 + 3)
+#define EEPROM_SETTINGS_C64SPD_ADDR (JOYBUTTONS * 2 + 4)
+#define EEPROM_SETTINGS_AMISPD_ADDR (JOYBUTTONS * 2 + 5)
+#define EEPROM_SETTINGS_MAGIC       0x64
+#define EEPROM_SIZE              (JOYBUTTONS * 2 + 6)
 
 // Target modes selectable by the user with a 5 seconds mouse button hold
 #define MODE_C64   0
@@ -113,11 +137,22 @@ uint8_t HQ[4] = { LOW, HIGH, HIGH, LOW };
 uint8_t QX = 3;
 uint8_t QY = 3;
 
+bool gPalTiming = DEFAULT_PAL_TIMING;
+uint8_t gC64MouseSpeed = DEFAULT_C64_MOUSE_SPEED;
+uint8_t gAmigaMouseSpeed = DEFAULT_AMIGA_MOUSE_SPEED;
+uint32_t gMinDelayOnX = DEFAULT_MINdelayOnX;
+uint32_t gMaxDelayOnX = PAL ? PAL_MAXdelayOnX : NTSC_MAXdelayOnX;
+uint32_t gMinDelayOnY = DEFAULT_MINdelayOnY;
+uint32_t gMaxDelayOnY = PAL ? PAL_MAXdelayOnY : NTSC_MAXdelayOnY;
+float gStepDelayOnX = PAL ? PAL_STEPdelayOnX : NTSC_STEPdelayOnX;
+float gStepDelayOnY = PAL ? PAL_STEPdelayOnY : NTSC_STEPdelayOnY;
+uint32_t gM2JCalib = PAL ? PAL_M2JCalib : NTSC_M2JCalib;
+
 // Define the volatile variables for the hardware timers
-volatile uint64_t delayOnX = MINdelayOnX;
-volatile uint64_t delayOnY = MINdelayOnY;
-volatile uint64_t delayOffX = 10;
-volatile uint64_t delayOffY = 10;
+volatile uint32_t delayOnX = DEFAULT_MINdelayOnX;
+volatile uint32_t delayOnY = DEFAULT_MINdelayOnY;
+volatile uint32_t delayOffX = 10;
+volatile uint32_t delayOffY = 10;
 
 // Define the hardware timers
 hw_timer_t *timerOnX = NULL;
@@ -212,6 +247,57 @@ static void saveModeToEEPROM(uint8_t mode) {
   EEPROM.commit();
 }
 
+static inline uint8_t clampMouseSpeed(uint8_t speed) {
+  if (speed < 1 || speed > 5) return 3;
+  return speed;
+}
+
+static void applyTimingSettings() {
+  if (gPalTiming) {
+    gMinDelayOnX = PAL_MINdelayOnX;
+    gMaxDelayOnX = PAL_MAXdelayOnX;
+    gMinDelayOnY = PAL_MINdelayOnY;
+    gMaxDelayOnY = PAL_MAXdelayOnY;
+    gStepDelayOnX = PAL_STEPdelayOnX;
+    gStepDelayOnY = PAL_STEPdelayOnY;
+    gM2JCalib = PAL_M2JCalib;
+  } else {
+    gMinDelayOnX = NTSC_MINdelayOnX;
+    gMaxDelayOnX = NTSC_MAXdelayOnX;
+    gMinDelayOnY = NTSC_MINdelayOnY;
+    gMaxDelayOnY = NTSC_MAXdelayOnY;
+    gStepDelayOnX = NTSC_STEPdelayOnX;
+    gStepDelayOnY = NTSC_STEPdelayOnY;
+    gM2JCalib = NTSC_M2JCalib;
+  }
+
+  delayOnX = gMinDelayOnX;
+  delayOnY = gMinDelayOnY;
+}
+
+static void saveAdapterSettings() {
+  EEPROM.write(EEPROM_SETTINGS_MAGIC_ADDR, EEPROM_SETTINGS_MAGIC);
+  EEPROM.write(EEPROM_SETTINGS_PAL_ADDR, gPalTiming ? 1 : 0);
+  EEPROM.write(EEPROM_SETTINGS_C64SPD_ADDR, clampMouseSpeed(gC64MouseSpeed));
+  EEPROM.write(EEPROM_SETTINGS_AMISPD_ADDR, clampMouseSpeed(gAmigaMouseSpeed));
+  EEPROM.commit();
+}
+
+static void loadAdapterSettings() {
+  uint8_t magic = EEPROM.read(EEPROM_SETTINGS_MAGIC_ADDR);
+  if (magic != EEPROM_SETTINGS_MAGIC) {
+    gPalTiming = DEFAULT_PAL_TIMING;
+    gC64MouseSpeed = clampMouseSpeed(DEFAULT_C64_MOUSE_SPEED);
+    gAmigaMouseSpeed = clampMouseSpeed(DEFAULT_AMIGA_MOUSE_SPEED);
+    saveAdapterSettings();
+  } else {
+    gPalTiming = EEPROM.read(EEPROM_SETTINGS_PAL_ADDR) != 0;
+    gC64MouseSpeed = clampMouseSpeed(EEPROM.read(EEPROM_SETTINGS_C64SPD_ADDR));
+    gAmigaMouseSpeed = clampMouseSpeed(EEPROM.read(EEPROM_SETTINGS_AMISPD_ADDR));
+  }
+  applyTimingSettings();
+}
+
 static void applyModeToOriginalFlags() {
   if (gMode == MODE_C64) {
     ISC64 = 10;      // Force the original "C64 path"
@@ -300,6 +386,10 @@ static inline void stopModeHold() {
 static void updateModeHoldFromMouse(hid_mouse_input_report_boot_t *mouse_report) {
   // NEW: only allow arming/holding in the first 30 seconds after boot
   if (!modeSwitchAllowedNow()) return;
+  if (digitalRead(CONFIG) == LOW) {
+    stopModeHold();
+    return;
+  }
 
   uint8_t mask = 0;
   if (mouse_report->buttons.button1) mask |= 0x01; // Left
@@ -328,6 +418,61 @@ static void updateModeHoldFromMouse(hid_mouse_input_report_boot_t *mouse_report)
   esp_timer_start_once(modeHoldTimer, 5000000ULL);
 }
 
+static void blinkConfigValue(uint32_t color, uint8_t count) {
+  count = count == 0 ? 1 : count;
+  for (uint8_t i = 0; i < count; i++) {
+    ws2812b.setPixelColor(0, color);
+    ws2812b.show();
+    delay(90);
+    ws2812b.clear();
+    ws2812b.show();
+    delay(90);
+  }
+  delay(120);
+  setRuntimeLed();
+}
+
+static bool updateOnboardConfigFromMouse(hid_mouse_input_report_boot_t *mouse_report) {
+  static uint8_t lastMask = 0;
+
+  if (digitalRead(CONFIG) != LOW) {
+    lastMask = 0;
+    return false;
+  }
+
+  stopModeHold();
+
+  uint8_t mask = 0;
+  if (mouse_report->buttons.button1) mask |= 0x01; // BOOT + left: C64 mouse speed
+  if (mouse_report->buttons.button2) mask |= 0x02; // BOOT + right: Amiga/Atari mouse speed
+  if (mouse_report->buttons.button3) mask |= 0x04; // BOOT + middle: PAL/NTSC timing
+
+  if (mask == 0) {
+    lastMask = 0;
+    return true;
+  }
+
+  if (mask == lastMask) return true;
+  lastMask = mask;
+
+  if (mask == 0x01) {
+    gC64MouseSpeed = (gC64MouseSpeed >= 5) ? 1 : (uint8_t)(gC64MouseSpeed + 1);
+    saveAdapterSettings();
+    blinkConfigValue(LED_BLUE(), gC64MouseSpeed);
+  } else if (mask == 0x02) {
+    gAmigaMouseSpeed = (gAmigaMouseSpeed >= 5) ? 1 : (uint8_t)(gAmigaMouseSpeed + 1);
+    saveAdapterSettings();
+    blinkConfigValue(LED_GREEN(), gAmigaMouseSpeed);
+  } else if (mask == 0x04) {
+    gPalTiming = !gPalTiming;
+    applyTimingSettings();
+    saveAdapterSettings();
+    blinkConfigValue(LED_RED(), gPalTiming ? 2 : 1);
+  }
+
+  return true;
+}
+
 // -------------------- USB host plumbing --------------------
 static const char *TAG = "USB MESSAGE";
 QueueHandle_t hid_host_event_queue;
@@ -339,6 +484,31 @@ typedef struct {
 } hid_host_event_queue_t;
 
 static const char *hid_proto_name_str[] = {"NONE", "KEYBOARD", "MOUSE"};
+
+static inline float mouseSpeedMultiplier(uint8_t speed) {
+  if (speed <= 1) return 0.25f;
+  if (speed == 2) return 0.50f;
+  if (speed == 3) return 1.00f;
+  if (speed == 4) return 1.50f;
+  return 2.00f;
+}
+
+static inline uint32_t wrapDelayValue(int64_t value, uint32_t minValue, uint32_t maxValue) {
+  int64_t range = (int64_t)maxValue - (int64_t)minValue + 1;
+  while (value > (int64_t)maxValue) value -= range;
+  while (value < (int64_t)minValue) value += range;
+  return (uint32_t)value;
+}
+
+static inline void releaseAllOutputs() {
+  digitalWrite(C64_UP, LOW);    pinMode(C64_UP, INPUT);
+  digitalWrite(C64_DOWN, LOW);  pinMode(C64_DOWN, INPUT);
+  digitalWrite(C64_LEFT, LOW);  pinMode(C64_LEFT, INPUT);
+  digitalWrite(C64_RIGHT, LOW); pinMode(C64_RIGHT, INPUT);
+  digitalWrite(C64_FIRE, LOW);  pinMode(C64_FIRE, INPUT);
+  digitalWrite(A_BUTTON2, LOW); pinMode(A_BUTTON2, INPUT);
+  digitalWrite(A_BUTTON3, LOW); pinMode(A_BUTTON3, INPUT);
+}
 
 // -------------------- Micromys wheel -> C64 pulses (LEFT/RIGHT lines) --------------------
 // Protocol details: pulses active-low, ~50ms low, ~50ms high between pulses.
@@ -472,6 +642,7 @@ static void hid_host_mouse_report_callback(const uint8_t *const data, const int 
     micromysEnqueueWheel(wheel);
   }
 
+  if (updateOnboardConfigFromMouse(mouse_report)) return;
   updateModeHoldFromMouse(mouse_report);
 
   if (digitalRead(SWITCH_MJ)) {       // Mouse mode
@@ -527,6 +698,7 @@ void hid_host_interface_callback(hid_host_device_handle_t hid_device_handle, con
     case HID_HOST_INTERFACE_EVENT_DISCONNECTED:
 //      ESP_LOGI(TAG, "HID Device, protocol '%s' DISCONNECTED", hid_proto_name_str[dev_params.proto]);
       ESP_ERROR_CHECK(hid_host_device_close(hid_device_handle));
+      releaseAllOutputs();
       break;
 
     case HID_HOST_INTERFACE_EVENT_TRANSFER_ERROR:
@@ -669,6 +841,10 @@ void IRAM_ATTR turnOffJoyY() {
 
 // -------------------- C64 mouse (mouse mode) --------------------
 void c64_mouse_m(hid_mouse_input_report_boot_t *mouse_report) {
+  static float xRemainder = 0.0f;
+  static float yRemainder = 0.0f;
+  float multiplier = mouseSpeedMultiplier(gC64MouseSpeed);
+
   if (mouse_report->buttons.button1) { pinMode(C64_FIRE, OUTPUT); digitalWrite(C64_FIRE, LOW); }
   else { digitalWrite(C64_FIRE, LOW); pinMode(C64_FIRE, INPUT); }
 
@@ -678,13 +854,17 @@ void c64_mouse_m(hid_mouse_input_report_boot_t *mouse_report) {
   if (mouse_report->buttons.button3) { pinMode(C64_DOWN, OUTPUT); digitalWrite(C64_DOWN, LOW); }
   else { digitalWrite(C64_DOWN, LOW); pinMode(C64_DOWN, INPUT); }
 
-  delayOnX += (STEPdelayOnX * mouse_report->x_displacement);
-  if (delayOnX > MAXdelayOnX) delayOnX = MINdelayOnX;
-  if (delayOnX < MINdelayOnX) delayOnX = MAXdelayOnX;
+  float scaledX = ((float)mouse_report->x_displacement * multiplier) + xRemainder;
+  int16_t dx = (int16_t)scaledX;
+  xRemainder = scaledX - (float)dx;
+  delayOnX = wrapDelayValue((int64_t)delayOnX + (int64_t)(gStepDelayOnX * dx),
+                            gMinDelayOnX, gMaxDelayOnX);
 
-  delayOnY -= (STEPdelayOnY * mouse_report->y_displacement);
-  if (delayOnY > MAXdelayOnY) delayOnY = MINdelayOnY;
-  if (delayOnY < MINdelayOnY) delayOnY = MAXdelayOnY;
+  float scaledY = ((float)mouse_report->y_displacement * multiplier) + yRemainder;
+  int16_t dy = (int16_t)scaledY;
+  yRemainder = scaledY - (float)dy;
+  delayOnY = wrapDelayValue((int64_t)delayOnY - (int64_t)(gStepDelayOnY * dy),
+                            gMinDelayOnY, gMaxDelayOnY);
 }
 
 // -------------------- C64 mouse (joystick mode) --------------------
@@ -693,15 +873,29 @@ void c64_mouse_j(hid_mouse_input_report_boot_t *mouse_report) {
   else { digitalWrite(C64_FIRE, LOW); pinMode(C64_FIRE, INPUT); }
 
   if (mouse_report->x_displacement > 0) { pinMode(C64_RIGHT, OUTPUT); digitalWrite(C64_RIGHT, LOW); }
-  else { pinMode(C64_LEFT, OUTPUT); digitalWrite(C64_LEFT, LOW); }
+  else if (mouse_report->x_displacement < 0) { pinMode(C64_LEFT, OUTPUT); digitalWrite(C64_LEFT, LOW); }
+  else {
+    digitalWrite(C64_LEFT, LOW); pinMode(C64_LEFT, INPUT);
+    digitalWrite(C64_RIGHT, LOW); pinMode(C64_RIGHT, INPUT);
+  }
 
   if (mouse_report->y_displacement > 0) { pinMode(C64_DOWN, OUTPUT); digitalWrite(C64_DOWN, LOW); }
-  else { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
+  else if (mouse_report->y_displacement < 0) { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
+  else {
+    digitalWrite(C64_UP, LOW); pinMode(C64_UP, INPUT);
+    digitalWrite(C64_DOWN, LOW); pinMode(C64_DOWN, INPUT);
+  }
 
-  timerWrite(timerOffX, 0);
-  timerAlarm(timerOffX, abs(mouse_report->x_displacement) * M2JCalib, false, 0);
-  timerWrite(timerOffY, 0);
-  timerAlarm(timerOffY, abs(mouse_report->y_displacement) * M2JCalib, false, 0);
+  uint32_t xPulse = abs(mouse_report->x_displacement) * gM2JCalib;
+  uint32_t yPulse = abs(mouse_report->y_displacement) * gM2JCalib;
+  if (xPulse > 0) {
+    timerWrite(timerOffX, 0);
+    timerAlarm(timerOffX, xPulse, false, 0);
+  }
+  if (yPulse > 0) {
+    timerWrite(timerOffY, 0);
+    timerAlarm(timerOffY, yPulse, false, 0);
+  }
 }
 
 // -------------------- Pin apply helpers --------------------
@@ -866,23 +1060,19 @@ void c64_joystick_m(const uint8_t *const data, const int length) {
   if (up)   { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
   else      { digitalWrite(C64_UP, LOW); pinMode(C64_UP, INPUT); }
 
-  delayOnX += dX;
-  if (delayOnX > MAXdelayOnX) delayOnX = MINdelayOnX;
-  if (delayOnX < MINdelayOnX) delayOnX = MAXdelayOnX;
+  delayOnX = wrapDelayValue((int64_t)delayOnX + dX, gMinDelayOnX, gMaxDelayOnX);
 
-  delayOnY += dY;
-  if (delayOnY > MAXdelayOnY) delayOnY = MINdelayOnY;
-  if (delayOnY < MINdelayOnY) delayOnY = MAXdelayOnY;
+  delayOnY = wrapDelayValue((int64_t)delayOnY + dY, gMinDelayOnY, gMaxDelayOnY);
 
   applyAutofirePulse_C64(autofireEnabled);
 #else
   float x = 0;
   float y = 0;
 
-  if (data[joyPos[0]] == joyVal[0]) y =  3 * STEPdelayOnY;
-  if (data[joyPos[1]] == joyVal[1]) y = -3 * STEPdelayOnY;
-  if (data[joyPos[2]] == joyVal[2]) x = -3 * STEPdelayOnX;
-  if (data[joyPos[3]] == joyVal[3]) x =  3 * STEPdelayOnY;
+  if (data[joyPos[0]] == joyVal[0]) y =  3 * gStepDelayOnY;
+  if (data[joyPos[1]] == joyVal[1]) y = -3 * gStepDelayOnY;
+  if (data[joyPos[2]] == joyVal[2]) x = -3 * gStepDelayOnX;
+  if (data[joyPos[3]] == joyVal[3]) x =  3 * gStepDelayOnX;
 
   if (data[joyPos[4]] == joyVal[4]) { pinMode(C64_FIRE, OUTPUT); digitalWrite(C64_FIRE, LOW); }
   else { digitalWrite(C64_FIRE, LOW); pinMode(C64_FIRE, INPUT); }
@@ -890,13 +1080,9 @@ void c64_joystick_m(const uint8_t *const data, const int length) {
   if (data[joyPos[5]] == joyVal[5]) { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
   else { digitalWrite(C64_UP, LOW); pinMode(C64_UP, INPUT); }
 
-  delayOnX += x;
-  if (delayOnX > MAXdelayOnX) delayOnX = MINdelayOnX;
-  if (delayOnX < MINdelayOnX) delayOnX = MAXdelayOnX;
+  delayOnX = wrapDelayValue((int64_t)delayOnX + (int64_t)x, gMinDelayOnX, gMaxDelayOnX);
 
-  delayOnY += y;
-  if (delayOnY > MAXdelayOnY) delayOnY = MINdelayOnY;
-  if (delayOnY < MINdelayOnY) delayOnY = MAXdelayOnY;
+  delayOnY = wrapDelayValue((int64_t)delayOnY + (int64_t)y, gMinDelayOnY, gMaxDelayOnY);
 #endif
 }
 
@@ -995,10 +1181,20 @@ void a_joystick_m(const uint8_t *const data, const int length) {
 
 // -------------------- Amiga/Atari mouse (mouse mode) --------------------
 void a_mouse_m(hid_mouse_input_report_boot_t *mouse_report) {
-  int xsteps = abs(mouse_report->x_displacement);
-  int ysteps = abs(mouse_report->y_displacement);
-  int xsign = (mouse_report->x_displacement > 0 ? 1 : 0);
-  int ysign = (mouse_report->y_displacement > 0 ? 1 : 0);
+  static float xRemainder = 0.0f;
+  static float yRemainder = 0.0f;
+  float multiplier = mouseSpeedMultiplier(gAmigaMouseSpeed);
+  float scaledX = ((float)mouse_report->x_displacement * multiplier) + xRemainder;
+  float scaledY = ((float)mouse_report->y_displacement * multiplier) + yRemainder;
+  int xMove = (int)scaledX;
+  int yMove = (int)scaledY;
+  xRemainder = scaledX - (float)xMove;
+  yRemainder = scaledY - (float)yMove;
+
+  int xsteps = abs(xMove);
+  int ysteps = abs(yMove);
+  int xsign = (xMove > 0 ? 1 : 0);
+  int ysign = (yMove > 0 ? 1 : 0);
   int xpulse = 0;
   int ypulse = 0;
 
@@ -1006,14 +1202,14 @@ void a_mouse_m(hid_mouse_input_report_boot_t *mouse_report) {
     xpulse = PULSE_LENGTH;
     ypulse = PULSE_LENGTH;
   } else {
-    if (xsteps > 15 & xsteps <= 100) xsteps = xsteps / 15;
+    if (xsteps > 15 && xsteps <= 100) xsteps = xsteps / 15;
     if (xsteps > 100) xsteps = xsteps / 30;
 
-    if (ysteps > 15 & ysteps <= 100) ysteps = ysteps / 15;
+    if (ysteps > 15 && ysteps <= 100) ysteps = ysteps / 15;
     if (ysteps > 100) ysteps = ysteps / 30;
 
-    xpulse = 18.6 * PULSE_LENGTH / xsteps;
-    ypulse = 18.6 * PULSE_LENGTH / ysteps;
+    xpulse = (xsteps > 0) ? (int)(18.6 * PULSE_LENGTH / xsteps) : PULSE_LENGTH;
+    ypulse = (ysteps > 0) ? (int)(18.6 * PULSE_LENGTH / ysteps) : PULSE_LENGTH;
   }
 
   if (mouse_report->buttons.button1) { pinMode(A_FIRE, OUTPUT); digitalWrite(A_FIRE, LOW); }
@@ -1045,15 +1241,29 @@ void a_mouse_j(hid_mouse_input_report_boot_t *mouse_report) {
   else { digitalWrite(C64_FIRE, LOW); pinMode(C64_FIRE, INPUT); }
 
   if (mouse_report->x_displacement > 0) { pinMode(C64_RIGHT, OUTPUT); digitalWrite(C64_RIGHT, LOW); }
-  else { pinMode(C64_LEFT, OUTPUT); digitalWrite(C64_LEFT, LOW); }
+  else if (mouse_report->x_displacement < 0) { pinMode(C64_LEFT, OUTPUT); digitalWrite(C64_LEFT, LOW); }
+  else {
+    digitalWrite(C64_LEFT, LOW); pinMode(C64_LEFT, INPUT);
+    digitalWrite(C64_RIGHT, LOW); pinMode(C64_RIGHT, INPUT);
+  }
 
   if (mouse_report->y_displacement > 0) { pinMode(C64_DOWN, OUTPUT); digitalWrite(C64_DOWN, LOW); }
-  else { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
+  else if (mouse_report->y_displacement < 0) { pinMode(C64_UP, OUTPUT); digitalWrite(C64_UP, LOW); }
+  else {
+    digitalWrite(C64_UP, LOW); pinMode(C64_UP, INPUT);
+    digitalWrite(C64_DOWN, LOW); pinMode(C64_DOWN, INPUT);
+  }
 
-  timerWrite(timerOffX, 0);
-  timerAlarm(timerOffX, abs(mouse_report->x_displacement) * M2JCalib, false, 0);
-  timerWrite(timerOffY, 0);
-  timerAlarm(timerOffY, abs(mouse_report->y_displacement) * M2JCalib, false, 0);
+  uint32_t xPulse = abs(mouse_report->x_displacement) * gM2JCalib;
+  uint32_t yPulse = abs(mouse_report->y_displacement) * gM2JCalib;
+  if (xPulse > 0) {
+    timerWrite(timerOffX, 0);
+    timerAlarm(timerOffX, xPulse, false, 0);
+  }
+  if (yPulse > 0) {
+    timerWrite(timerOffY, 0);
+    timerAlarm(timerOffY, yPulse, false, 0);
+  }
 }
 
 // -------------------- Joystick learning support (original) --------------------
@@ -1168,6 +1378,7 @@ void setup() {
 
   // Start EEPROM
   EEPROM.begin(EEPROM_SIZE);
+  loadAdapterSettings();
 
   // Read learned joystick mapping (used only in LEARN mode)
   for (int i = 0; i < JOYBUTTONS; i++) {
@@ -1208,6 +1419,8 @@ void setup() {
   // Define the GPIO and interrupt for the mouse/joystick switch
   pinMode(SWITCH_MJ, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SWITCH_MJ), switchMJHandler, CHANGE);
+
+  releaseAllOutputs();
 
   // -------------------- Per-target initialization (forced by gMode) --------------------
   if (ISC64 >= 5 && ISC64 <= 15) {

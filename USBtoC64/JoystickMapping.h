@@ -19,7 +19,8 @@
 
 enum JM_Op : uint8_t {
   JM_EQ = 0,      // (data[index] == value)
-  JM_BITANY = 1   // ((data[index] & value) != 0)
+  JM_BITANY = 1,  // ((data[index] & value) != 0)
+  JM_HAT = 2      // ((data[index] & 0x0F) == value), for HID hat switches
 };
 
 enum JM_Func : uint8_t {
@@ -60,14 +61,14 @@ static bool JM_autoleftright = false;
 // Example based on your snippet.
 static const JM_Rule JM_JOY_RULES[] = {
   // Hat / D-pad directions on data[1]
-  { 1, 0, JM_EQ, JM_UP },
-  { 1, 1, JM_EQ, JM_UP_RIGHT },
-  { 1, 2, JM_EQ, JM_RIGHT },
-  { 1, 3, JM_EQ, JM_RIGHT_DOWN },
-  { 1, 4, JM_EQ, JM_DOWN },
-  { 1, 5, JM_EQ, JM_DOWN_LEFT },
-  { 1, 6, JM_EQ, JM_LEFT },
-  { 1, 7, JM_EQ, JM_LEFT_UP },
+  { 1, 0, JM_HAT, JM_UP },
+  { 1, 1, JM_HAT, JM_UP_RIGHT },
+  { 1, 2, JM_HAT, JM_RIGHT },
+  { 1, 3, JM_HAT, JM_RIGHT_DOWN },
+  { 1, 4, JM_HAT, JM_DOWN },
+  { 1, 5, JM_HAT, JM_DOWN_LEFT },
+  { 1, 6, JM_HAT, JM_LEFT },
+  { 1, 7, JM_HAT, JM_LEFT_UP },
 
   // Extra "UP" source (example: data[8] == 8)
   { 8, 8, JM_EQ, JM_UP },
@@ -140,6 +141,7 @@ static inline bool JM_match(const JM_Rule &r, const uint8_t *data, int length) {
   if ((int)r.index >= length) return false;
   uint8_t v = data[r.index];
   if (r.op == JM_EQ) return (v == r.value);
+  if (r.op == JM_HAT) return ((v & 0x0F) == r.value);
   return ((v & r.value) != 0);
 }
 

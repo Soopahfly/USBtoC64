@@ -109,8 +109,8 @@ static inline void MM_DecodeMouseReport(const uint8_t *data, int length,
         uint8_t b4 = data[map->y_index + 1];
         int16_t x16 = (int16_t)((uint16_t)b1 | ((uint16_t)b2 << 8));
         int16_t y16 = (int16_t)((uint16_t)b3 | ((uint16_t)b4 << 8));
-        out->x_displacement = x16;
-        out->y_displacement = y16;
+        out->x_displacement = MM_ClampToI8(x16);
+        out->y_displacement = MM_ClampToI8(y16);
       }
       break;
   }

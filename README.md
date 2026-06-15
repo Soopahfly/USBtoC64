@@ -1,5 +1,49 @@
 # USB Adapter for Commodore 64, AMIGA and ATARI Joystick and Mouse Port
 
+## This Fork
+
+This fork is based on Emanuele Laface's original [USBtoC64](https://github.com/emanuelelaface/USBtoC64) project.
+
+The goal of this version is to keep the original hardware and simple firmware model, while improving day-to-day compatibility with USB mice and game controllers on the Commodore 64, especially for GEOS / 1351 mouse use and mouse-as-joystick games.
+
+### Changes From The Original Project
+
+- Added onboard mouse/button configuration for C64 mouse speed, Amiga/Atari mouse speed, and PAL/NTSC timing. These settings are saved in EEPROM and do not require reflashing.
+- Added runtime PAL/NTSC timing selection. The compile-time `PAL` define is now only the default used when EEPROM settings are first initialized.
+- Added C64 and Amiga/Atari mouse speed presets from 1 to 5.
+- Fixed mouse-as-joystick mode so zero mouse movement no longer asserts LEFT/UP.
+- Fixed Atari mouse mode divide-by-zero on reports with no movement on one axis.
+- Fixed joystick-as-C64-mouse RIGHT movement to use the X timing step instead of the Y timing step.
+- Improved C64 mouse timing wrapping so larger movement reports are handled more predictably.
+- Changed shared mouse timing values from 64-bit to 32-bit values, which is enough for these timer counts and avoids unnecessary ISR/task sharing risk.
+- Added safer output release on USB disconnect/setup to reduce stuck direction/fire states.
+- Improved custom mouse report decoding by clamping 16-bit HID deltas instead of allowing wraparound.
+- Added `JM_HAT` support in custom joystick mappings for HID hat-switch D-pads and diagonals.
+
+### Onboard Configuration
+
+Connect a USB mouse to the adapter. Hold the adapter's **BOOT** button, then click one mouse button:
+
+- **BOOT + left mouse button**: cycle C64 mouse speed from 1 to 5. The LED blinks blue to show the selected value.
+- **BOOT + right mouse button**: cycle Amiga/Atari mouse speed from 1 to 5. The LED blinks green to show the selected value.
+- **BOOT + middle mouse button**: toggle C64 PAL/NTSC timing. One red blink means NTSC; two red blinks means PAL.
+
+Release the mouse button and BOOT button after the LED feedback. Settings are saved to EEPROM and survive power cycles.
+
+The original target-machine selector still works: within the first 30 seconds after boot, hold a single mouse button for about 5 seconds:
+
+- **Left button**: Commodore 64
+- **Right button**: Amiga
+- **Middle button**: Atari
+
+### Compatibility Notes
+
+For ordinary USB mice, leave `MOUSE_MAP_CUSTOM` set to `0`. This uses USB HID boot mouse protocol and should be the most compatible mode for basic wired mice such as the Raspberry Pi USB Mouse or Retro Games Ltd Tank Mouse.
+
+Wheel support still requires `MOUSE_MAP_CUSTOM` and a report mapping that matches your mouse. That path is more device-specific.
+
+For gamepads and arcade sticks, simple USB HID controllers should work via the learning procedure. For custom firmware mappings, `JM_HAT` can now be used for HID hat-switch D-pads so diagonals work as combined directions.
+
 This adapter interfaces a USB device with the CONTROL Port of the C64, AMIGA and ATARI, allowing it to be used as a mouse or joystick.
 
 The joystick connects via pins 1, 2, 3, 4, and 6 of the CONTROL port, with the GPIOs simply set as open circuits or shorted to ground when a joystick direction is pressed.
@@ -63,13 +107,13 @@ If you like this project and want a fully assembled and tested board, you can pu
 ## Installation From Arduino IDE
 
 To install the code from the source file **USBtoC64.ino**, you will need the Arduino IDE. Ensure that the ESP32 board is installed, specifically the ESP32S3 Dev Module.  
-The flag `PAL` is for C64 PAL / NTSC selection.
+The flag `PAL` sets the default C64 PAL / NTSC timing used when EEPROM settings are first initialized. After flashing, PAL/NTSC timing can be changed from the adapter using **BOOT + middle mouse button**.
 
 Additionally, the ESP32 USB HID HOST library is required. This library is not available in the official repository. You can download the ZIP file of the repository from [ESP32_USB_Host_HID](https://github.com/esp32beans/ESP32_USB_Host_HID). To install it, go to `Sketch -> Include Library -> Add .ZIP Library` in the Arduino IDE.
 
 To set the board in upload mode, hold the **BOOT** button while the board is disconnected from the USB port. Then, connect the board to the USB port and after one second, the USB port should appear in the list of ports in the Arduino IDE. You can then upload the code.
 
-To select PAL or NTSC timing the `#define PAL` line has to be set as true or false.
+To choose the default PAL or NTSC timing before first boot, set the `#define PAL` line to true or false. After the adapter has initialized EEPROM, use the onboard configuration gesture instead.
 
 ## Installation From the Binary File
 
