@@ -2,3 +2,4 @@ build/
 build-*/
 *.elf
 *.map
+readback-*.bin

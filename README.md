@@ -44,6 +44,31 @@ Wheel support still requires `MOUSE_MAP_CUSTOM` and a report mapping that matche
 
 For gamepads and arcade sticks, simple USB HID controllers should work via the learning procedure. For custom firmware mappings, `JM_HAT` can now be used for HID hat-switch D-pads so diagonals work as combined directions.
 
+### C64 Diagnostic PRG
+
+The `diagnostics` folder contains `U64TEST.prg`, a small C64 BASIC program for checking the adapter from the Commodore 64 side.
+
+Load it on the C64 with:
+
+```text
+LOAD"U64TEST.PRG",8,1
+RUN
+```
+
+The program defaults to control port 2. Press **SPACE** to toggle between port 1 and port 2, **R** to reset the scores, or **Q** to quit.
+
+The C64 cannot directly read the adapter's physical mouse/joystick switch. Instead, this diagnostic watches both the SID POT X/Y registers and the joystick direction/fire lines:
+
+- Moving in C64 mouse mode should change the POT X/Y values and raise the mouse score.
+- Moving in joystick mode should assert UP/DOWN/LEFT/RIGHT/FIRE and raise the joystick score.
+- In C64 mouse mode, the adapter maps left button to FIRE, right button to UP, and middle button to DOWN.
+
+The readable BASIC source is `diagnostics/USBtoC64ModeTest.bas`. Rebuild the PRG on Windows with:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File diagnostics\build-prg.ps1
+```
+
 This adapter interfaces a USB device with the CONTROL Port of the C64, AMIGA and ATARI, allowing it to be used as a mouse or joystick.
 
 The joystick connects via pins 1, 2, 3, 4, and 6 of the CONTROL port, with the GPIOs simply set as open circuits or shorted to ground when a joystick direction is pressed.
