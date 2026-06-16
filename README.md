@@ -44,9 +44,14 @@ Wheel support still requires `MOUSE_MAP_CUSTOM` and a report mapping that matche
 
 For gamepads and arcade sticks, simple USB HID controllers should work via the learning procedure. For custom firmware mappings, `JM_HAT` can now be used for HID hat-switch D-pads so diagonals work as combined directions.
 
-### C64 Diagnostic PRG
+### C64 Mouse And Joystick Diagnostic PRG
 
-The `diagnostics` folder contains `U64TEST.prg`, a small C64 BASIC program for checking the adapter from the Commodore 64 side.
+The `diagnostics` folder contains `U64TEST.prg`, a small C64 BASIC diagnostic for checking the adapter from the Commodore 64 side. It is intended for quick bench testing after flashing, changing the mouse/joystick switch, trying a new USB mouse, or checking a newly learned gamepad mapping.
+
+The C64 cannot directly read the adapter's physical mouse/joystick switch. Instead, the diagnostic watches the signals that software on the C64 can actually see:
+
+- SID POT X/Y readings, used by C64 1351-style mouse mode.
+- CIA joystick direction/fire lines, used by joystick mode and by the mouse button mappings.
 
 Load it on the C64 with:
 
@@ -55,18 +60,32 @@ LOAD"U64TEST.PRG",8,1
 RUN
 ```
 
-The program defaults to control port 2. Press **SPACE** to toggle between port 1 and port 2, **R** to reset the scores, or **Q** to quit.
+The program defaults to control port 2, which is what most C64 games use. Press **SPACE** to toggle between port 1 and port 2, **R** to reset the mouse/joystick/warning scores, or **Q** to quit.
 
-The C64 cannot directly read the adapter's physical mouse/joystick switch. Instead, this diagnostic watches both the SID POT X/Y registers and the joystick direction/fire lines:
+Screen guide:
 
-- Moving in C64 mouse mode should change the POT X/Y values and raise the mouse score.
-- The on-screen `X` cursor moves inside the box when POT X/Y movement is seen.
-- Moving in joystick mode should assert UP/DOWN/LEFT/RIGHT/FIRE and raise the joystick score.
-- The joystick panel shows `UP`, `DOWN`, `LEFT`, `RIGHT`, and `FIRE`; each word brightens while that input is pressed.
-- In C64 mouse mode, the adapter maps left button to FIRE, right button to UP, and middle button to DOWN.
-- The status line flags implausible input combinations such as UP+DOWN, LEFT+RIGHT, very large POT jumps, or POT movement while direction lines are also asserted.
+- **PORT / MODE**: shows the selected C64 control port and the current best guess: `MOUSE MODE`, `JOYSTICK MODE`, or `UNSURE`.
+- **POT X/Y and DX/DY**: shows raw SID POT readings and the latest signed movement delta.
+- **JOY**: shows the live digital joystick line state as `UP`, `DN`, `LT`, `RT`, and `FR`.
+- **MOUSE / JOY / WARN**: running scores used to classify the adapter behavior and count suspicious input frames.
+- **STATUS**: shows `OK` or the most recent plausibility warning.
+- **Pointer box**: the on-screen `X` moves when POT X/Y movement is detected.
+- **Joystick panel**: `UP`, `DOWN`, `LEFT`, `RIGHT`, and `FIRE` brighten while that input is pressed.
 
-The readable BASIC source is `diagnostics/USBtoC64ModeTest.bas`. Rebuild the PRG on Windows with:
+Expected results:
+
+- In C64 mouse mode, moving a USB mouse should change POT X/Y and move the `X` in the pointer box. The mouse score should rise.
+- In joystick mode, moving a joystick/gamepad or mouse-as-joystick should light the matching joystick words and raise the joystick score.
+- In C64 mouse mode, left mouse button appears as FIRE, right button appears as UP, and middle button appears as DOWN. This matches the adapter's C64 mouse button mapping.
+
+Plausibility warnings:
+
+- `BAD: UP+DOWN`: both vertical directions are active at the same time.
+- `BAD: LEFT+RIGHT`: both horizontal directions are active at the same time.
+- `CHECK: POT JUMP`: the POT reading jumped by an unusually large amount in one frame.
+- `CHECK: POT+DIR`: POT movement and direction lines were seen together. This can be legitimate when pressing mouse buttons in C64 mouse mode, but it is useful for spotting noisy wiring, stuck lines, or a device behaving unexpectedly.
+
+The readable BASIC source is `diagnostics/USBtoC64ModeTest.bas`. The checked-in `U64TEST.prg` is generated from that source. Rebuild the PRG on Windows with:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File diagnostics\build-prg.ps1
