@@ -10,6 +10,7 @@ $tokens = [ordered]@{
   "PRINT" = 0x99
   "GOTO" = 0x89
   "IF" = 0x8B
+  "POKE" = 0x97
   "THEN" = 0xA7
   "GET" = 0xA1
   "END" = 0x80

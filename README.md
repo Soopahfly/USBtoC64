@@ -60,8 +60,10 @@ The program defaults to control port 2. Press **SPACE** to toggle between port 1
 The C64 cannot directly read the adapter's physical mouse/joystick switch. Instead, this diagnostic watches both the SID POT X/Y registers and the joystick direction/fire lines:
 
 - Moving in C64 mouse mode should change the POT X/Y values and raise the mouse score.
+- The on-screen `X` cursor moves inside the box when POT X/Y movement is seen.
 - Moving in joystick mode should assert UP/DOWN/LEFT/RIGHT/FIRE and raise the joystick score.
 - In C64 mouse mode, the adapter maps left button to FIRE, right button to UP, and middle button to DOWN.
+- The status line flags implausible input combinations such as UP+DOWN, LEFT+RIGHT, very large POT jumps, or POT movement while direction lines are also asserted.
 
 The readable BASIC source is `diagnostics/USBtoC64ModeTest.bas`. Rebuild the PRG on Windows with:
 
