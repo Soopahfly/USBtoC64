@@ -66,11 +66,14 @@ Screen guide:
 
 - **PORT / MODE**: shows the selected C64 control port and the current best guess: `MOUSE MODE`, `JOYSTICK MODE`, or `UNSURE`.
 - **POT X/Y and DX/DY**: shows raw SID POT readings and the latest signed movement delta.
+- **MOVE / JITTER**: shows the dominant movement direction from the latest POT delta and counts small idle POT changes that may indicate jitter.
 - **JOY**: shows the live digital joystick line state as `UP`, `DN`, `LT`, `RT`, and `FR`.
 - **MOUSE / JOY / WARN**: running scores used to classify the adapter behavior and count suspicious input frames.
 - **STATUS**: shows `OK` or the most recent plausibility warning.
 - **Pointer box**: the on-screen `X` moves when POT X/Y movement is detected.
 - **Joystick panel**: `UP`, `DOWN`, `LEFT`, `RIGHT`, and `FIRE` brighten while that input is pressed.
+- **SEEN checklist**: `M U D L R F` brightens once mouse movement, up, down, left, right, or fire has been observed since the last reset.
+- **BTN line**: highlights the C64 mouse-button mapping: left button as FIRE, right button as UP, and middle button as DOWN.
 
 Expected results:
 
@@ -84,6 +87,7 @@ Plausibility warnings:
 - `BAD: LEFT+RIGHT`: both horizontal directions are active at the same time.
 - `CHECK: POT JUMP`: the POT reading jumped by an unusually large amount in one frame.
 - `CHECK: POT+DIR`: POT movement and direction lines were seen together. This can be legitimate when pressing mouse buttons in C64 mouse mode, but it is useful for spotting noisy wiring, stuck lines, or a device behaving unexpectedly.
+- `STUCK: UP/DOWN/LEFT/RIGHT/FIRE`: one input has stayed active for a long time and may be stuck, held, mis-mapped, or shorted.
 
 The readable BASIC source is `diagnostics/USBtoC64ModeTest.bas`. The checked-in `U64TEST.prg` is generated from that source. Rebuild the PRG on Windows with:
 
