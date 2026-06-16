@@ -62,6 +62,7 @@ The C64 cannot directly read the adapter's physical mouse/joystick switch. Inste
 - Moving in C64 mouse mode should change the POT X/Y values and raise the mouse score.
 - The on-screen `X` cursor moves inside the box when POT X/Y movement is seen.
 - Moving in joystick mode should assert UP/DOWN/LEFT/RIGHT/FIRE and raise the joystick score.
+- The joystick panel shows `UP`, `DOWN`, `LEFT`, `RIGHT`, and `FIRE`; each word brightens while that input is pressed.
 - In C64 mouse mode, the adapter maps left button to FIRE, right button to UP, and middle button to DOWN.
 - The status line flags implausible input combinations such as UP+DOWN, LEFT+RIGHT, very large POT jumps, or POT movement while direction lines are also asserted.
 
