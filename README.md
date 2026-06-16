@@ -66,7 +66,7 @@ Screen guide:
 
 - **PORT / MODE**: shows the selected C64 control port and the current best guess: `MOUSE MODE`, `JOYSTICK MODE`, or `UNSURE`.
 - **POT X/Y and DX/DY**: shows raw SID POT readings and the latest signed movement delta.
-- **MOVE / JITTER**: shows the dominant movement direction from the latest POT delta and counts small idle POT changes that may indicate jitter.
+- **MOVE / JIT / SPK**: shows the dominant movement direction from the filtered POT delta, counts small idle POT jitter, and counts rejected raw POT spikes.
 - **JOY**: shows the live digital joystick line state as `UP`, `DN`, `LT`, `RT`, and `FR`.
 - **MOUSE / JOY / WARN**: running scores used to classify the adapter behavior and count suspicious input frames.
 - **STATUS**: shows `OK` or the most recent plausibility warning.
@@ -85,7 +85,7 @@ Plausibility warnings:
 
 - `BAD: UP+DOWN`: both vertical directions are active at the same time.
 - `BAD: LEFT+RIGHT`: both horizontal directions are active at the same time.
-- `CHECK: POT JUMP`: the POT reading jumped by an unusually large amount in one frame.
+- `CHECK: POT NOISE`: the raw POT reading jumped by an unusually large amount in one frame. The tester still displays the raw POT value, but ignores that spike for cursor movement, mouse scoring, and mode guessing.
 - `CHECK: POT+DIR`: POT movement and direction lines were seen together. This can be legitimate when pressing mouse buttons in C64 mouse mode, but it is useful for spotting noisy wiring, stuck lines, or a device behaving unexpectedly.
 - `STUCK: UP/DOWN/LEFT/RIGHT/FIRE`: one input has stayed active for a long time and may be stuck, held, mis-mapped, or shorted.
 
