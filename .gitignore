@@ -3,3 +3,6 @@ build-*/
 *.elf
 *.map
 readback-*.bin
+diagnostics/*.log
+diagnostics/*.detok.txt
+diagnostics/*-vice-*.png
